@@ -1,0 +1,208 @@
+#include <BluetoothSerial.h>
+
+// Inicializa o Bluetooth
+BluetoothSerial SerialBT;
+
+// Definições dos pinos dos motores
+#define MOTOR1_IN1 18
+#define MOTOR1_IN2 19
+#define MOTOR2_IN3 21
+#define MOTOR2_IN4 22
+int ENA = 2;  // Motor A
+int ENB = 4;  // Motor B
+
+// Definições dos LEDs e Buzzer
+#define ledA 23   // Farol dianteiro
+#define ledB 25   // Luz traseira
+#define buzzer 17 // Buzzer
+
+// Variável da velocidade inicial (0 a 255)
+int velocidadeMotores = 200;
+
+// Controle do buzzer e LEDs traseiros
+bool buzzerAtivo = false;
+unsigned long ultimoBip = 0;
+int intervaloBip = 300; // tempo em ms para ligar/desligar buzzer e LED
+
+void setup() {
+  // Inicia Bluetooth e Serial
+  SerialBT.begin("Botzilla");  
+  Serial.begin(115200);
+  Serial.println("Bluetooth Iniciado. Emparelhe com 'Botzilla'.");
+
+  // Configura os pinos digitais
+  pinMode(MOTOR1_IN1, OUTPUT);
+  pinMode(MOTOR1_IN2, OUTPUT);
+  pinMode(MOTOR2_IN3, OUTPUT);
+  pinMode(MOTOR2_IN4, OUTPUT);
+
+  pinMode(ledA, OUTPUT);
+  pinMode(ledB, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+
+  noTone(buzzer); // buzzer desligado no início
+  digitalWrite(ledA, LOW);
+  digitalWrite(ledB, LOW);
+}
+
+void setVelocidade(int velo) {
+  ledcWrite(0, velo); // Motor A
+  ledcWrite(1, velo); // Motor B
+}
+
+// ----------------- Funções de movimento -----------------
+void parado() {
+  digitalWrite(MOTOR1_IN1, HIGH);
+  digitalWrite(MOTOR1_IN2, HIGH);
+  digitalWrite(MOTOR2_IN3, HIGH);
+  digitalWrite(MOTOR2_IN4, HIGH);
+
+  digitalWrite(ledA, LOW);
+  digitalWrite(ledB, LOW);
+  noTone(buzzer);
+  buzzerAtivo = false;
+}
+
+void frente() {
+  digitalWrite(MOTOR1_IN1, HIGH);
+  digitalWrite(MOTOR1_IN2, LOW);
+  digitalWrite(MOTOR2_IN3, HIGH);
+  digitalWrite(MOTOR2_IN4, LOW);
+
+  digitalWrite(ledA, HIGH); // farol ligado
+  digitalWrite(ledB, LOW);
+  noTone(buzzer);
+  buzzerAtivo = false;
+}
+
+void tras() {
+  digitalWrite(MOTOR1_IN1, LOW);
+  digitalWrite(MOTOR1_IN2, HIGH);
+  digitalWrite(MOTOR2_IN3, LOW);
+  digitalWrite(MOTOR2_IN4, HIGH);
+
+  digitalWrite(ledA, LOW);
+  buzzerAtivo = true; // ativa bip + LED traseiro piscante
+}
+
+void esquerda() {
+  digitalWrite(MOTOR1_IN1, LOW);
+  digitalWrite(MOTOR1_IN2, HIGH);
+  digitalWrite(MOTOR2_IN3, HIGH);
+  digitalWrite(MOTOR2_IN4, LOW);
+
+  digitalWrite(ledA, LOW);
+  digitalWrite(ledB, LOW);
+  noTone(buzzer);
+  buzzerAtivo = false;
+}
+
+void direita() {
+  digitalWrite(MOTOR1_IN1, HIGH);
+  digitalWrite(MOTOR1_IN2, LOW);
+  digitalWrite(MOTOR2_IN3, LOW);
+  digitalWrite(MOTOR2_IN4, HIGH);
+
+  digitalWrite(ledA, LOW);
+  digitalWrite(ledB, LOW);
+  noTone(buzzer);
+  buzzerAtivo = false;
+}
+
+void frenteEsquerda() {
+  digitalWrite(MOTOR1_IN1, HIGH);
+  digitalWrite(MOTOR1_IN2, LOW);
+  digitalWrite(MOTOR2_IN3, HIGH);
+  digitalWrite(MOTOR2_IN4, HIGH);
+
+  digitalWrite(ledA, HIGH); // farol ligado
+  digitalWrite(ledB, LOW);
+  noTone(buzzer);
+  buzzerAtivo = false;
+}
+
+void frenteDireita() {
+  digitalWrite(MOTOR1_IN1, HIGH);
+  digitalWrite(MOTOR1_IN2, HIGH);
+  digitalWrite(MOTOR2_IN3, HIGH);
+  digitalWrite(MOTOR2_IN4, LOW);
+
+  digitalWrite(ledA, HIGH); // farol ligado
+  digitalWrite(ledB, LOW);
+  noTone(buzzer);
+  buzzerAtivo = false;
+}
+
+void trasEsquerda() {
+  digitalWrite(MOTOR1_IN1, LOW);
+  digitalWrite(MOTOR1_IN2, HIGH);
+  digitalWrite(MOTOR2_IN3, HIGH);
+  digitalWrite(MOTOR2_IN4, HIGH);
+
+  digitalWrite(ledA, LOW);
+  buzzerAtivo = true; // ativa bip + LED traseiro piscante
+}
+
+void trasDireita() {
+  digitalWrite(MOTOR1_IN1, HIGH);
+  digitalWrite(MOTOR1_IN2, HIGH);
+  digitalWrite(MOTOR2_IN3, LOW);
+  digitalWrite(MOTOR2_IN4, HIGH);
+
+  digitalWrite(ledA, LOW);
+  buzzerAtivo = true; // ativa bip + LED traseiro piscante
+}
+
+// ----------------- Loop principal -----------------
+void loop() {
+  setVelocidade(velocidadeMotores);
+
+  // Controle do buzzer + LED traseiro piscando intermitente
+  if (buzzerAtivo) {
+    unsigned long agora = millis();
+    if (agora - ultimoBip >= intervaloBip) {
+      ultimoBip = agora;
+      static bool estado = false;
+      estado = !estado;
+      if (estado) {
+        tone(buzzer, 600);       // liga buzzer
+        digitalWrite(ledB, HIGH); // liga LED traseiro
+      } else {
+        noTone(buzzer);           // desliga buzzer
+        digitalWrite(ledB, LOW);  // desliga LED traseiro
+      }
+    }
+  }
+
+  if (SerialBT.available()) {
+    char command = SerialBT.read();
+    Serial.println(command);
+
+    switch (command) {
+      case 'F': frente(); break;
+      case 'B': tras(); break;
+      case 'L': esquerda(); break;
+      case 'R': direita(); break;
+      case 'S': parado(); break;
+      case 'G': frenteEsquerda(); break;
+      case 'I': frenteDireita(); break;
+      case 'H': trasEsquerda(); break;
+      case 'J': trasDireita(); break;
+      
+      // Controle de velocidade
+      case '+': 
+        velocidadeMotores = min(velocidadeMotores + 25, 255);
+        SerialBT.println("Aumentou Velocidade");
+        break;
+
+      case '-': 
+        velocidadeMotores = max(velocidadeMotores - 25, 0);
+        SerialBT.println("Diminuiu Velocidade");
+        break;
+
+      default: 
+        parado(); 
+        break;
+    }
+  }
+}
